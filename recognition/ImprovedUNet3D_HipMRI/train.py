@@ -139,7 +139,7 @@ def main():
 
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats()
-    history, best_dice, best_epoch = [], -1.0, 0
+    history, best_score, best_dice, best_epoch = [], (-1.0, -1.0), -1.0, 0
     start = time.time()
     for epoch in range(1, args.epochs + 1):
         train_loss = train_one_epoch(model, train_loader, optimiser, loss_fn, device, is_2d, args.slice_batch, amp)
@@ -150,9 +150,11 @@ def main():
                         "val_dice": val_dice.tolist(), "lr": scheduler.get_last_lr()[0],
                         "elapsed_s": time.time() - start})
 
+        # Select on prostate Dice; break ties (e.g. prostate still 0 early on) by mean foreground Dice
         prostate = val_dice[PROSTATE].item()
-        if prostate > best_dice:
-            best_dice, best_epoch = prostate, epoch
+        score = (prostate, val_dice[1:].nanmean().item())
+        if score > best_score:
+            best_score, best_dice, best_epoch = score, prostate, epoch
             torch.save({"model": model.state_dict(), "args": vars(args), "epoch": epoch}, out / "best.pt")
         print(f"epoch {epoch:3d} | train {train_loss:.4f} | val {val['loss']:.4f} | "
               f"val Dice " + " ".join(f"{CLASS_NAMES[c][:4]} {val_dice[c]:.3f}" for c in range(1, NUM_CLASSES))
