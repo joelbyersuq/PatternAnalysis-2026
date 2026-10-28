@@ -17,6 +17,8 @@
 
 MODEL=${1:?usage: sbatch train.slurm <unet3d|unet2d> [extra train.py args]}
 shift
+EXTRA_ARGS=("$@")
+set --  # clear positional args: a sourced script (conda's activate) would otherwise receive them
 
 echo "Job $SLURM_JOB_ID on $(hostname), started $(date)"
 nvidia-smi --query-gpu=name,memory.total --format=csv
@@ -24,8 +26,9 @@ git log --oneline -1  # record which code version produced this run
 
 source "$HOME/miniconda3/bin/activate"
 conda activate torch
+echo "python: $(which python)"
 
 # --max-hours leaves time inside the 3 h limit for the test pass after training
-python train.py --model "$MODEL" --amp --max-hours 2.5 --out "runs/${MODEL}_${SLURM_JOB_ID}" "$@"
+python train.py --model "$MODEL" --amp --max-hours 2.5 --out "runs/${MODEL}_${SLURM_JOB_ID}" "${EXTRA_ARGS[@]}"
 
 echo "Finished $(date)"

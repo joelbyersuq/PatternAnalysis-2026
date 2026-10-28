@@ -37,7 +37,7 @@ def parse_args():
     p.add_argument("--root", default="/home/groups/comp3710/HipMRI_Study_open")
     p.add_argument("--synthetic", action="store_true", help="use synthetic phantoms (CPU smoke test)")
     p.add_argument("--shape", type=int, nargs=3, default=DEFAULT_SHAPE, metavar=("D", "H", "W"))
-    p.add_argument("--epochs", type=int, default=150)
+    p.add_argument("--epochs", type=int, default=300, help="as in Isensee et al.; ~10 s/epoch for unet3d at 64x128x128 on an A100")
     p.add_argument("--batch-size", type=int, default=2, help="volumes per step")
     p.add_argument("--slice-batch", type=int, default=32, help="unet2d only: slices per step")
     p.add_argument("--lr", type=float, default=5e-4)
