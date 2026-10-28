@@ -6,11 +6,13 @@
 # Extra arguments after the model name are passed to train.py.
 #SBATCH --job-name=hipmri
 #SBATCH --partition=comp3710
+#SBATCH --account=comp3710
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --time=03:00:00
 # No --mem: comp3710 nodes are registered in Slurm with 1 MB of memory, so any --mem request
 # leaves the job pending forever. Jobs that start on this partition all show mem=1M.
+# --account=comp3710: the default personal account is rejected by the partition (PartitionConfig).
 #SBATCH --output=%x_%j.out
 
 MODEL=${1:?usage: sbatch train.slurm <unet3d|unet2d> [extra train.py args]}
