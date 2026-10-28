@@ -12,6 +12,7 @@ runs/
 
 # Rangpur / Slurm job logs
 slurm-*.out
+*.out
 
 # Python
 __pycache__/
