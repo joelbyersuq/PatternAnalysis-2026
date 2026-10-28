@@ -1,0 +1,5 @@
+# Versions used for local CPU testing. Re-pin to the Rangpur environment before submission.
+torch==2.14.0
+numpy==2.4.3
+nibabel==5.4.2
+matplotlib==3.10.8

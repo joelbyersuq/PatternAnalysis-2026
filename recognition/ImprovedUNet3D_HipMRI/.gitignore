@@ -1,0 +1,19 @@
+# Datasets and model files must never be committed (task sheet, Section 4.1)
+*.nii
+*.nii.gz
+*.npy
+*.npz
+*.pt
+*.pth
+*.ckpt
+data/
+checkpoints/
+runs/
+
+# Rangpur / Slurm job logs
+slurm-*.out
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
