@@ -8,8 +8,9 @@
 #SBATCH --partition=comp3710
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=32G
 #SBATCH --time=03:00:00
+# No --mem: comp3710 nodes are registered in Slurm with 1 MB of memory, so any --mem request
+# leaves the job pending forever. Jobs that start on this partition all show mem=1M.
 #SBATCH --output=%x_%j.out
 
 MODEL=${1:?usage: sbatch train.slurm <unet3d|unet2d> [extra train.py args]}
