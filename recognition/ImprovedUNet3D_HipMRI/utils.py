@@ -32,6 +32,24 @@ def dice_iou(pred, target, num_classes):
     return dice, iou
 
 
+def count_components(mask, max_iters=1000):
+    """
+    Number of 26-connected components in a 3D boolean mask, by iterative label propagation:
+    every voxel takes the largest ID in its 3x3x3 neighbourhood until nothing changes.
+    Used to count disconnected prostate fragments (the true prostate is one component).
+    """
+    if not mask.any():
+        return 0
+    m = mask[None, None].float()
+    ids = torch.arange(1, mask.numel() + 1, dtype=torch.float32, device=mask.device).reshape(m.shape) * m
+    for _ in range(max_iters):
+        new = torch.nn.functional.max_pool3d(ids, 3, stride=1, padding=1) * m
+        if torch.equal(new, ids):
+            break
+        ids = new
+    return int(torch.unique(ids[m.bool()]).numel())
+
+
 def predict_logits(model, image, is_2d):
     """Logits (B, C, D, H, W) for a (B, 1, D, H, W) volume from either model type."""
     return segment_volume_2d(model, image) if is_2d else model(image)
