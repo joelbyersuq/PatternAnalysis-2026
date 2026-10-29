@@ -1,5 +1,7 @@
-# Versions used for local CPU testing. Re-pin to the Rangpur environment before submission.
-torch==2.14.0
-numpy==2.4.3
+# Environment used for the reported results (Rangpur, conda env "torch", Python 3.11.15).
+# The CUDA build of torch comes from the PyTorch index, e.g.
+#   pip install torch==2.13.0 --index-url https://download.pytorch.org/whl/cu130
+torch==2.13.0
+numpy==2.4.6
 nibabel==5.4.2
-matplotlib==3.10.8
+matplotlib==3.11.2

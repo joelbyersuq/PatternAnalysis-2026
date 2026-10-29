@@ -38,7 +38,7 @@ stacked back into a volume for scoring.
 
 ## Feasibility review
 
-*Presented at the feasibility check-off. Numbers marked TODO are filled in from the first GPU runs.*
+*Presented at the feasibility check-off. Numbers are from the data audit and the first GPU run.*
 
 ### 1. User need, scope and acceptance criteria
 
@@ -76,7 +76,7 @@ leakage into rectum and bladder), or only improves the easy central slices at a 
   patients have several weekly scans and must be split by patient. Volumes are 256×256×128 at about
   1.56–1.68 mm in-plane and 1.56 mm between slices (close to isotropic, which suits 3D
   convolutions). Labels take the values 0–5. Split by patient with a fixed seed: 136 / 48 / 27
-  scans (train / val / test) from TODO patients.
+  scans (train / val / test) from 26 / 6 / 6 patients.
 - **Pipeline smoke test.** Both models train end to end on synthetic phantoms on CPU; loss falls and
   validation Dice rises within a few epochs, and the evaluation and figure scripts run.
 - **Resource estimate.** A 2-epoch run of the 3D model on real data at the 64×128×128 working
@@ -101,11 +101,11 @@ same versions):
 
 | Package | Version |
 |---|---|
-| Python | TODO |
-| PyTorch (CUDA) | TODO |
-| NumPy | TODO |
-| nibabel | TODO |
-| matplotlib | TODO |
+| Python | 3.11.15 |
+| PyTorch (CUDA) | 2.13.0+cu130 (CUDA 13.0) |
+| NumPy | 2.4.6 |
+| nibabel | 5.4.2 |
+| matplotlib | 3.11.2 |
 
 Hardware: one NVIDIA A100-PCIE-40GB per training job (Slurm partition `comp3710`).
 
@@ -149,8 +149,8 @@ inflate test scores. Patients are shuffled with a fixed seed and allocated 70 / 
 
 | Split | Scans | Patients | Used for |
 |---|---|---|---|
-| Train | 136 | TODO | fitting weights |
-| Validation | 48 | TODO | choosing the best epoch (highest validation prostate Dice) |
+| Train | 136 | 26 | fitting weights |
+| Validation | 48 | 6 | choosing the best epoch (highest validation prostate Dice) |
 | Test | 27 | 6 | all reported results, used once at the end |
 
 `split_by_patient` asserts that no patient appears in two splits. Scan counts are uneven because
