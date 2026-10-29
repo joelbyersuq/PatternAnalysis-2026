@@ -200,10 +200,19 @@ committed:
 `train.slurm` handles both.
 
 **Example input and output.** Each case figure in the results shows the input MR slice, the
-ground-truth labels, and both models' predicted labels with prostate error overlays. Training
-curves for the reported runs:
+ground-truth labels, and both models' predicted labels with prostate error overlays.
 
-TODO: add `runs/unet3d_707428/curves.png` and `runs/unet2d_707429/curves.png` (copy to `figures/`).
+**Training curves** for the reported runs (written by `train.py` every epoch):
+
+| 3D Improved U-Net (job 707428) | 2D U-Net (job 707429) |
+|---|---|
+| ![3D training curves](figures/curves_unet3d.png) | ![2D training curves](figures/curves_unet2d.png) |
+
+Both models converge within about 50 epochs, after which validation Dice is flat. From about
+epoch 60–100, validation loss creeps up while training loss keeps falling: mild overfitting,
+stronger for the 2D model (validation loss 0.13 → 0.17) than the 3D model (0.12 → 0.13). This is
+why the checkpoint with the best validation prostate Dice (epochs 72 and 62) is used instead of the
+final epoch. Later epochs add training time but not accuracy.
 
 ## Results
 
