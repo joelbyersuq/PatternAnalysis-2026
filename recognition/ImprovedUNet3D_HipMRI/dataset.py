@@ -28,7 +28,8 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
-# Label convention assumed for HipMRI semantic labels. TODO: verify against the real data.
+# HipMRI semantic label values 0-5. Checked on the real data: label 3 lies anterior/superior to
+# the prostate (bladder) and label 4 posterior to it (rectum) in predict.py's case figures.
 CLASS_NAMES = ["background", "body", "bone", "bladder", "rectum", "prostate"]
 NUM_CLASSES = len(CLASS_NAMES)
 PROSTATE = CLASS_NAMES.index("prostate")

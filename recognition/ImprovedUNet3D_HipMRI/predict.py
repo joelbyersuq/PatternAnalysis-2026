@@ -35,7 +35,9 @@ from utils import count_components, dice_iou, predict_logits
 
 BLADDER, RECTUM = CLASS_NAMES.index("bladder"), CLASS_NAMES.index("rectum")
 N_BINS = 10  # bins along the prostate's apex-base extent
-LABEL_CMAP = ListedColormap(["black", "#555555", "#e8e8a0", "#3a7bd5", "#a0522d", "#e03030"])
+# background, body, bone, bladder, rectum, prostate. Chosen not to clash with the error overlay
+# colours (green / red / blue).
+LABEL_CMAP = ListedColormap(["black", "#555555", "#e8e8a0", "#40c0c0", "#a0522d", "#d040d0"])
 MODEL_NAMES = {"unet3d": "3D Improved U-Net", "unet2d": "2D U-Net"}
 
 
@@ -180,13 +182,14 @@ def plot_case(case_id, image, label, preds, results, path):
     n_cols = 2 + 2 * len(preds)
     fig, axes = plt.subplots(len(slices), n_cols, figsize=(2.6 * n_cols, 2.6 * len(slices)), squeeze=False)
     img, lab = image.numpy(), label.numpy()
+    show = lambda a: np.rot90(a, k=-1)  # display with anterior at the top
     for r, (z, where) in enumerate(slices):
-        row = [("MR", img[z], "gray"), ("ground truth", lab[z], "label")]
+        row = [("MR", show(img[z]), "gray"), ("ground truth", show(lab[z]), "label")]
         for name, pred in preds.items():
             p = pred.numpy()
             d = results[name]["dice"][PROSTATE]
-            row.append((f"{MODEL_NAMES[name]}\nprostate Dice {d:.2f}", p[z], "label"))
-            row.append((f"{MODEL_NAMES[name]} errors", error_overlay(img[z], p[z], lab[z]), "rgb"))
+            row.append((f"{MODEL_NAMES[name]}\nprostate Dice {d:.2f}", show(p[z]), "label"))
+            row.append((f"{MODEL_NAMES[name]} errors", show(error_overlay(img[z], p[z], lab[z])), "rgb"))
         for c, (title, data, kind) in enumerate(row):
             ax = axes[r, c]
             if kind == "label":
@@ -199,7 +202,9 @@ def plot_case(case_id, image, label, preds, results, path):
                 ax.set_title(title, fontsize=8)
             if c == 0:
                 ax.set_ylabel(f"{where} (z={z})", fontsize=8)
-    fig.suptitle(f"{case_id}   errors: green = correct prostate, red = false positive, blue = missed", fontsize=9)
+    fig.suptitle(f"{case_id}   labels: bladder cyan, rectum brown, prostate magenta, bone yellow   |   "
+                 f"errors: green = correct prostate, red = false positive, blue = missed   |   anterior at top",
+                 fontsize=9)
     fig.tight_layout()
     fig.savefig(path, dpi=110)
     plt.close(fig)
