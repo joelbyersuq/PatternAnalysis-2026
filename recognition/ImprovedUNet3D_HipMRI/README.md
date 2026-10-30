@@ -380,13 +380,17 @@ slices and the prostate-rectum interface. Neither model is suitable for unreview
 
 ## Artificial Intelligence Usage Disclosure
 
+Claude Code was used throughout this project for code generation, debugging and drafting
+documentation. I ran all training and evaluation on Rangpur myself, and checked every claim in
+this report against the logged outputs listed below.
+
 | Date | Tool | What it helped with | How I verified it |
 |------|------|---------------------|-------------------|
-| 2026-10-28 | Claude Code (Claude Opus 5.5) | Repository setup, project folder scaffold, README skeleton, first version of `dataset.py` (synthetic generator, file pairing, patient-level split) | TODO |
-| 2026-10-28 | Claude Code (Claude Opus 5.5) | `modules.py` (3D Improved U-Net, 2D U-Net, Dice + CE loss), `train.py`, `utils.py`, `train.slurm` | TODO |
-| 2026-10-28 | Claude Code (Claude Opus 5.5) | Diagnosing pending Slurm jobs (account and `--mem` problems) from `scontrol` / `sinfo` output | TODO |
-| 2026-10-28 | Claude Code (Claude Opus 5.5) | `predict.py` (apex-to-base slice Dice, leakage, connected components, case figures), checkpoint-selection bug fix | TODO |
-| 2026-10-29 | Claude Code (Claude Opus 5.5) | Interpreting results, per-patient comparison, architecture diagram, drafting README sections (feasibility review, results, failure autopsy, recommendation, usage) | TODO |
+| 2026-10-28 | Claude Code (Claude Opus 5.5) | Repository setup, project folder scaffold, README skeleton, first version of `dataset.py` (synthetic generator, file pairing, patient-level split) | Listed the real file names, scan count (211) and label values (0–5) on Rangpur and checked they matched the loader's naming pattern and class list. Confirmed the split sizes (26 / 6 / 6 patients) on the real data; `split_by_patient` asserts no patient is in two splits. Confirmed the bladder and rectum label numbers visually from their positions in the case figures. |
+| 2026-10-28 | Claude Code (Claude Opus 5.5) | `modules.py` (3D Improved U-Net, 2D U-Net, Dice + CE loss), `train.py`, `utils.py`, `train.slurm` | Checked the architecture against Isensee et al. (2018) level by level. Smoke tests: both models give the right output shapes, the loss is 0 for a perfect prediction and large for a wrong one, and both train on synthetic data. Ran a 2-epoch job on the real data on Rangpur before the full runs (loss fell, prostate Dice rose to 0.30). Training curves show both full runs converging. |
+| 2026-10-28 | Claude Code (Claude Opus 5.5) | Diagnosing pending Slurm jobs (account and `--mem` problems) from `scontrol` / `sinfo` output | Ran `sinfo`, `scontrol show job` and a `diff` of my pending job against a running job on Rangpur. The differences (memory request and account) matched the diagnosis, and after each fix the job's pending reason changed and it ran. |
+| 2026-10-28 | Claude Code (Claude Opus 5.5) | `predict.py` (apex-to-base slice Dice, leakage, connected components, case figures), checkpoint-selection bug fix | Ran `predict.py` twice on Rangpur on the same checkpoints and got identical results. Its test Dice agrees with `train.py`'s (prostate 0.8349 vs 0.8351). The checkpoint bug was found on a synthetic run where the best epoch stayed at 1; after the fix the best epoch advanced. Inspected every case figure against the reported numbers. |
+| 2026-10-29 | Claude Code (Claude Opus 5.5) | Interpreting results, per-patient comparison, architecture diagram, drafting README sections (feasibility review, results, failure autopsy, recommendation, usage) | Checked the README's numbers against `test_metrics.json` and `predict_results.json`, and the architecture diagram against `modules.py`. Reviewed the failure-case descriptions against the figures, and the recommendation against the results, including the limits of a 6-patient test set. |
 
 ## References
 
