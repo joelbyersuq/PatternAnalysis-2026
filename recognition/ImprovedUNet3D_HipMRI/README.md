@@ -110,6 +110,7 @@ same versions):
 Hardware: one NVIDIA A100-PCIE-40GB per training job (Slurm partition `comp3710`).
 
 **Reproducibility.**
+
 - The patient split is deterministic: patients are shuffled with seed 42 (`--seed`), and
   `predict.py` rebuilds the same test split from the seed stored in the checkpoint. It refuses to
   compare two checkpoints trained on different splits.
@@ -131,6 +132,7 @@ spacing of about 1.56–1.68 mm in-plane and 1.56 mm between slices. Labels: 0 b
 from their positions relative to the prostate in the case figures.
 
 **Pre-processing** (`dataset.py`):
+
 1. Load each Nifti volume with nibabel and reorder axes from (x, y, z) to (depth, height, width).
 2. Z-score normalise each MR volume (subtract its mean, divide by its standard deviation), because
    MR intensities have no fixed scale between scans.
@@ -183,6 +185,7 @@ python predict.py --unet3d runs/unet3d_<job>/best.pt --unet2d runs/unet2d_<job>/
 
 **Outputs.** `train.py` writes to `runs/<model>_<job>/`, which is git-ignored so no weights are
 committed:
+
 - `best.pt`
 - `history.json`
 - `curves.png` (loss and per-class validation Dice per epoch)
@@ -192,6 +195,7 @@ committed:
 `predict.py` prints the report shown in the results and writes the figures in `figures/`.
 
 **Rangpur notes.**
+
 - Jobs on `comp3710` must use `--account=comp3710`; with the default personal account they stay
   pending with reason `PartitionConfig`.
 - Jobs must not request `--mem`: nodes are registered with 1 MB of memory, so any memory request
