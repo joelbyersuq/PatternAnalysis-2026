@@ -1,5 +1,7 @@
 # 3D Improved U-Net for Prostate Segmentation on HipMRI
 
+**Author:** Joel Byers (s4960893)
+
 COMP3710 Pattern Recognition report, segmentation project (task sheet Section 2.2), **Hard**
 difficulty. The model is compared against a 2D U-Net baseline to test whether volumetric context
 fixes the boundary errors that matter in radiotherapy planning.
@@ -26,7 +28,8 @@ fine detail lost in downsampling, and merges them with a *localization module*. 
 normalisation and leaky ReLU replace batch normalisation, because 3D volumes force batch sizes of
 1–2. *Deep supervision* adds 1×1×1 segmentation layers on the three highest-resolution decoder levels
 and sums their upsampled outputs, so coarse levels are also trained towards the final segmentation.
-Training minimises soft Dice (averaged over the six classes, so the small prostate counts as much as
+This sum is the network's output: a single loss is applied to it, with no separate loss term per
+level, so each level's gradient comes through its share of the summed prediction. Training minimises soft Dice (averaged over the six classes, so the small prostate counts as much as
 the background) plus cross-entropy.
 
 ![3D Improved U-Net architecture](figures/architecture.png)
@@ -145,6 +148,14 @@ from their positions relative to the prostate in the case figures.
 **Augmentation** (training split only, the same for both models): random left-right flip, applied
 identically to image and label, and a random intensity scale (±10%) and shift (±0.1).
 
+*Correction after code review:* the code at the due date flipped the last array axis, which is
+anterior-posterior, not left-right (volumes are (z, x, y) after loading, and the case figures show
+the last axis running front to back). So the reported models were trained with front-to-back
+mirroring, an anatomically impossible image with the rectum in front of the prostate, on about half
+the training samples. `augment` now flips the left-right axis. The reported models were not
+retrained. Both models had the same augmentation, so the 2D-vs-3D comparison is still like for like,
+but absolute Dice may be slightly lower than correct augmentation would give.
+
 **Splits.** Split by **patient**, not by scan: each patient has up to 8 weekly scans of the same
 anatomy, so putting a patient's scans in both training and test sets would leak their anatomy and
 inflate test scores. Patients are shuffled with a fixed seed and allocated 70 / 15 / 15%:
@@ -192,7 +203,8 @@ committed:
 - `test_metrics.json` (test Dice and IoU, parameters, peak VRAM, timing)
 - `test_per_case.csv`
 
-`predict.py` prints the report shown in the results and writes the figures in `figures/`.
+`predict.py` prints the report shown in the results, writes the figures in `figures/`, and writes
+every number (per model and per scan) to `results/predict_results.json`.
 
 **Rangpur notes.**
 
@@ -237,7 +249,11 @@ optimiser. Numbers are mean ± standard deviation over test scans, from `predict
 
 Both models pass the 0.70 prostate Dice target (acceptance criterion A1), and on whole-volume
 overlap they are indistinguishable. Validation prostate Dice favoured the 3D model (0.862 vs
-0.830), but that gap did not carry over to the test patients.
+0.830), but that gap did not carry over to the test patients. Two things explain this. First, the
+best epoch was *chosen* by validation prostate Dice from 300 epochs, so the validation score is the
+maximum of a noisy curve and is optimistic for both models. Second, validation and test are
+different sets of only 6 patients each, so differences between patients outweigh a 0.03 gap. The test
+set, used once, is the unbiased comparison.
 
 ### Where along the prostate the models fail
 
@@ -304,6 +320,21 @@ Because scans of one patient are correlated, the position comparison was repeate
 The pattern from the averages holds patient by patient: 3D context helps at the ends and the
 2D baseline is better in the middle. The test set is unbalanced (J026, T014 and V027 contribute
 8 scans each; K008, S028 and T009 one each), so the per-patient row is the fairer summary.
+
+Whole-volume prostate Dice per patient (mean over that patient's scans):
+
+| Patient | Scans | 3D Improved U-Net | 2D U-Net | 3D − 2D |
+|---|---|---|---|---|
+| J026 | 8 | 0.843 | 0.840 | +0.003 |
+| K008 | 1 | 0.753 | 0.785 | −0.032 |
+| S028 | 1 | 0.843 | 0.849 | −0.006 |
+| T009 | 1 | 0.905 | 0.875 | +0.029 |
+| T014 | 8 | 0.779 | 0.779 | 0.000 |
+| V027 | 8 | 0.883 | 0.887 | −0.004 |
+| **Mean of patients** | 27 | **0.834** | **0.836** | −0.001 |
+
+Per patient, whole-volume Dice is a tie too (within ±0.03 for every patient). The difference
+between the models only shows up when Dice is broken down by position along the prostate.
 
 ### Failure case autopsy
 
@@ -395,6 +426,7 @@ this report against the logged outputs listed below.
 | 2026-10-28 | Claude Code (Claude Opus 5.5) | Diagnosing pending Slurm jobs (account and `--mem` problems) from `scontrol` / `sinfo` output | Ran `sinfo`, `scontrol show job` and a `diff` of my pending job against a running job on Rangpur. The differences (memory request and account) matched the diagnosis, and after each fix the job's pending reason changed and it ran. |
 | 2026-10-28 | Claude Code (Claude Opus 5.5) | `predict.py` (apex-to-base slice Dice, leakage, connected components, case figures), checkpoint-selection bug fix | Ran `predict.py` twice on Rangpur on the same checkpoints and got identical results. Its test Dice agrees with `train.py`'s (prostate 0.8349 vs 0.8351). The checkpoint bug was found on a synthetic run where the best epoch stayed at 1; after the fix the best epoch advanced. Inspected every case figure against the reported numbers. |
 | 2026-10-29 | Claude Code (Claude Opus 5.5) | Interpreting results, per-patient comparison, architecture diagram, drafting README sections (feasibility review, results, failure autopsy, recommendation, usage) | Checked the README's numbers against `test_metrics.json` and `predict_results.json`, and the architecture diagram against `modules.py`. Reviewed the failure-case descriptions against the figures, and the recommendation against the results, including the limits of a 6-patient test set. |
+| 2026-11-23 | Claude Code (Claude Opus 5.5) | Responding to code review: flip-axis fix, HD95 metric, results folder, README additions | Checked the corrected flip mirrors left-right and keeps the bladder anterior and the rectum posterior of the prostate. Checked HD95 against known cases (0 for identical masks, 6.0 mm for a 2-voxel shift at 3 mm spacing). Re-ran the full pipeline on synthetic data. |
 
 ## References
 
