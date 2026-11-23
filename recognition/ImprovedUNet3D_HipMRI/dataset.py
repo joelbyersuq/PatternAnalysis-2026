@@ -132,9 +132,14 @@ def resample(image, label, shape):
 
 
 def augment(image, label, generator=None):
-    """Random left-right flip and intensity scale/shift, applied identically to image and label."""
+    """
+    Random left-right flip and intensity scale/shift, applied identically to image and label.
+
+    Volumes are (D, H, W) = Nifti (z, x, y): H runs left-right and W anterior-posterior (see the
+    case figures), so the flip is on H. Flipping W would put the rectum in front of the prostate.
+    """
     if torch.rand(1, generator=generator) < 0.5:
-        image, label = image.flip(-1), label.flip(-1)
+        image, label = image.flip(-2), label.flip(-2)
     scale = 1 + (torch.rand(1, generator=generator) - 0.5) * 0.2
     shift = (torch.rand(1, generator=generator) - 0.5) * 0.2
     return image * scale + shift, label
@@ -154,11 +159,14 @@ class HipMRI3D(Dataset):
         self.case_ids = [c[3] for c in cases]
         self.train = train
         self.images, self.labels = [], []
+        self.spacings = []  # (D, H, W) voxel size in mm after resampling, for distance metrics
         for image_path, label_path, _, case_id in cases:
             image = normalise(load_nifti(image_path, is_label=False))
             label = load_nifti(label_path, is_label=True)
             if image.shape != label.shape:
                 raise ValueError(f"{case_id}: image {tuple(image.shape)} vs label {tuple(label.shape)}")
+            zx, zy, zz = nib.load(str(image_path)).header.get_zooms()[:3]
+            self.spacings.append(tuple(float(z) * n / s for z, n, s in zip((zz, zx, zy), image.shape, shape)))
             image, label = resample(image, label, shape)
             self.images.append(image)
             self.labels.append(label.to(torch.uint8))
@@ -186,7 +194,8 @@ class SyntheticHipMRI(Dataset):
     def __init__(self, n, shape=DEFAULT_SHAPE, seed=0, train=False):
         self.n, self.shape, self.seed, self.train = n, shape, seed, train
         axes = [torch.linspace(-1, 1, s) for s in shape]
-        self.grid = torch.stack(torch.meshgrid(*axes, indexing="ij"))  # (3, D, H, W) as (z, y, x)
+        # (3, D, H, W) as (z, left-right, anterior-posterior), the same axis order as the real volumes
+        self.grid = torch.stack(torch.meshgrid(*axes, indexing="ij"))
 
     def __len__(self):
         return self.n
@@ -200,14 +209,14 @@ class SyntheticHipMRI(Dataset):
             d = ((self.grid - centre[:, None, None, None]) / radii[:, None, None, None]) ** 2
             return d.sum(0) <= 1
 
-        # (class, centre (z, y, x), radii (z, y, x)); later entries overwrite earlier ones
+        # (class, centre (z, lr, ap), radii (z, lr, ap)); later entries overwrite earlier ones
         parts = [
-            (1, (0, 0, 0), (0.95, 0.8, 0.9)),          # body
-            (2, (0, 0.1, -0.6), (0.6, 0.2, 0.15)),     # bone (left)
-            (2, (0, 0.1, 0.6), (0.6, 0.2, 0.15)),      # bone (right)
-            (3, (0.2, -0.35, 0), (0.3, 0.25, 0.3)),    # bladder, anterior
-            (4, (0, 0.4, 0), (0.6, 0.12, 0.12)),       # rectum, posterior
-            (5, (-0.1, 0.1, 0), (0.15, 0.12, 0.13)),   # prostate, small
+            (1, (0, 0, 0), (0.95, 0.9, 0.8)),          # body
+            (2, (0, -0.6, 0.1), (0.6, 0.15, 0.2)),     # bone (left)
+            (2, (0, 0.6, 0.1), (0.6, 0.15, 0.2)),      # bone (right)
+            (3, (0.2, 0, -0.35), (0.3, 0.3, 0.25)),    # bladder, anterior
+            (4, (0, 0, 0.4), (0.6, 0.12, 0.12)),       # rectum, posterior
+            (5, (-0.1, 0, 0.1), (0.15, 0.13, 0.12)),   # prostate, small
         ]
         label = torch.zeros(self.shape, dtype=torch.int64)
         for cls, centre, radii in parts:
