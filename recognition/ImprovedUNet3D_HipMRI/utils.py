@@ -50,6 +50,30 @@ def count_components(mask, max_iters=1000):
     return int(torch.unique(ids[m.bool()]).numel())
 
 
+def hd95(pred_mask, gt_mask, spacing=(1.0, 1.0, 1.0)):
+    """
+    95th-percentile symmetric Hausdorff distance between two 3D boolean masks, in the units of
+    `spacing` (mm per voxel along D, H, W). Surfaces are the mask voxels with a background voxel
+    in their 3x3x3 neighbourhood; every surface voxel's distance to the other surface is pooled
+    over both directions. NaN if either mask is empty.
+    """
+    if not pred_mask.any() or not gt_mask.any():
+        return float("nan")
+
+    def surface_points(mask):
+        m = mask[None, None].float()
+        eroded = -torch.nn.functional.max_pool3d(-m, 3, stride=1, padding=1)
+        surface = (m - eroded)[0, 0] > 0
+        return torch.nonzero(surface).float() * torch.tensor(spacing, dtype=torch.float32, device=mask.device)
+
+    a, b = surface_points(pred_mask), surface_points(gt_mask)
+
+    def directed(src, dst, chunk=4096):
+        return torch.cat([torch.cdist(src[i:i + chunk], dst).min(dim=1).values for i in range(0, len(src), chunk)])
+
+    return torch.quantile(torch.cat([directed(a, b), directed(b, a)]), 0.95).item()
+
+
 def predict_logits(model, image, is_2d):
     """Logits (B, C, D, H, W) for a (B, 1, D, H, W) volume from either model type."""
     return segment_volume_2d(model, image) if is_2d else model(image)

@@ -4,15 +4,16 @@ Run trained models on the held-out test patients and analyse where they fail.
 Loads one or both checkpoints written by train.py, rebuilds the same patient-level test
 split from the seed stored in the checkpoint, and reports:
   * per-class Dice / IoU on whole test volumes
+  * HD95 boundary distance in mm for the prostate, bladder and rectum
   * prostate Dice slice by slice, from apex to base (the open research question: does 3D
     context fix the end slices, or only the easy central ones?)
   * leakage between prostate and the rectum / bladder
   * disconnected prostate fragments (the true prostate is a single component)
-and saves figures:
+and saves, in --out (figures) and --results:
   * prostate_profile.png   mean slice Dice along the apex-base axis, per model
   * case_<id>.png          input / ground truth / prediction / error overlays for the
                            worst test cases (failure autopsy) and the best case (example output)
-  * predict_results.json   all numbers above, per model and per case
+  * predict_results.json   all numbers above, per model and per case (in --results)
 
 Usage:
   python predict.py --unet3d runs/unet3d_<job>/best.pt --unet2d runs/unet2d_<job>/best.pt
@@ -31,9 +32,10 @@ from matplotlib.colors import ListedColormap
 
 from dataset import CLASS_NAMES, NUM_CLASSES, PROSTATE, HipMRI3D, SyntheticHipMRI, find_cases, split_by_patient
 from modules import ImprovedUNet3D, UNet2D
-from utils import count_components, dice_iou, predict_logits
+from utils import count_components, dice_iou, hd95, predict_logits
 
 BLADDER, RECTUM = CLASS_NAMES.index("bladder"), CLASS_NAMES.index("rectum")
+HD95_CLASSES = ("prostate", "bladder", "rectum")  # the target and the organs at risk next to it
 N_BINS = 10  # bins along the prostate's apex-base extent
 # background, body, bone, bladder, rectum, prostate. Chosen not to clash with the error overlay
 # colours (green / red / blue).
@@ -48,7 +50,8 @@ def parse_args():
     p.add_argument("--root", default="/home/groups/comp3710/HipMRI_Study_open")
     p.add_argument("--synthetic", action="store_true")
     p.add_argument("--n-worst", type=int, default=4, help="number of failure cases to plot")
-    p.add_argument("--out", default="figures")
+    p.add_argument("--out", default="figures", help="folder for figures")
+    p.add_argument("--results", default="results", help="folder for predict_results.json")
     args = p.parse_args()
     if not (args.unet3d or args.unet2d):
         p.error("give at least one of --unet3d / --unet2d")
@@ -101,11 +104,13 @@ def apex_base_positions(label):
     return zs, (t if base_is_high else 1 - t)
 
 
-def analyse_case(pred, label):
-    """Per-case numbers for one model's prediction."""
+def analyse_case(pred, label, spacing):
+    """Per-case numbers for one model's prediction. `spacing` is mm per voxel along (D, H, W)."""
     dice, iou = dice_iou(pred, label, NUM_CLASSES)
     gt_p, pr_p = label == PROSTATE, pred == PROSTATE
     result = {"dice": dice.tolist(), "iou": iou.tolist(),
+              "hd95_mm": {n: hd95(pred == CLASS_NAMES.index(n), label == CLASS_NAMES.index(n), spacing)
+                          for n in HD95_CLASSES},
               "prostate_components": count_components(pr_p),
               # leakage: fraction of each organ's true voxels labelled as the other
               "rectum_as_prostate": ((label == RECTUM) & pr_p).sum().item() / max((label == RECTUM).sum().item(), 1),
@@ -259,16 +264,23 @@ def main():
             labels.append(label.to(torch.uint8))
             case_ids.append(case_id)
 
-    per_case = {n: [analyse_case(p.long(), l.long()) for p, l in zip(preds[n], labels)] for n in models}
+    # Synthetic phantoms have no physical spacing, so their distances are in voxels
+    spacings = getattr(test_set, "spacings", None) or [(1.0, 1.0, 1.0)] * len(case_ids)
+    per_case = {n: [analyse_case(p.long(), l.long(), s) for p, l, s in zip(preds[n], labels, spacings)]
+                for n in models}
     summary, profiles = {}, {}
     for name, cases in per_case.items():
         dice = np.array([c["dice"] for c in cases])
         iou = np.array([c["iou"] for c in cases])
+        hd = {n: np.array([c["hd95_mm"][n] for c in cases]) for n in HD95_CLASSES}
         profiles[name] = profile(cases)
         summary[name] = {
             "dice_mean": dict(zip(CLASS_NAMES, np.nanmean(dice, 0).tolist())),
             "dice_std": dict(zip(CLASS_NAMES, np.nanstd(dice, 0).tolist())),
             "iou_mean": dict(zip(CLASS_NAMES, np.nanmean(iou, 0).tolist())),
+            "hd95_mm_mean": {n: float(np.nanmean(v)) for n, v in hd.items()},
+            "hd95_mm_std": {n: float(np.nanstd(v)) for n, v in hd.items()},
+            "hd95_mm_median": {n: float(np.nanmedian(v)) for n, v in hd.items()},
             "prostate_dice_by_third": profiles[name][2],
             "prostate_dice_profile": profiles[name][0],
             "mean_prostate_components": float(np.mean([c["prostate_components"] for c in cases])),
@@ -284,6 +296,9 @@ def main():
         print(f"\n=== {MODEL_NAMES[name]} ({len(case_ids)} test volumes) ===")
         for c in CLASS_NAMES:
             print(f"  {c:10s} Dice {s['dice_mean'][c]:.3f} +/- {s['dice_std'][c]:.3f}   IoU {s['iou_mean'][c]:.3f}")
+        print("  HD95 (mm): " + " | ".join(
+            f"{n} {s['hd95_mm_mean'][n]:.2f} +/- {s['hd95_mm_std'][n]:.2f} (median {s['hd95_mm_median'][n]:.2f})"
+            for n in HD95_CLASSES))
         t = s["prostate_dice_by_third"]
         print(f"  prostate slice Dice  apex {t['apex']:.3f} | mid {t['mid']:.3f} | base {t['base']:.3f}")
         print(f"  prostate fragments: mean {s['mean_prostate_components']:.2f} components, "
@@ -310,8 +325,10 @@ def main():
 
     results = {"summary": summary, "train_args": train_args,
                "per_case": {n: {cid: c for cid, c in zip(case_ids, cases)} for n, cases in per_case.items()}}
-    (out / "predict_results.json").write_text(json.dumps(results, indent=1))
-    print(f"\nsaved {out / 'prostate_profile.png'} and {out / 'predict_results.json'}")
+    results_dir = Path(args.results)
+    results_dir.mkdir(parents=True, exist_ok=True)
+    (results_dir / "predict_results.json").write_text(json.dumps(results, indent=1))
+    print(f"\nsaved {out / 'prostate_profile.png'} and {results_dir / 'predict_results.json'}")
 
 
 if __name__ == "__main__":
